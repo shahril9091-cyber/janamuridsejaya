@@ -406,6 +406,20 @@
   @media (max-width:640px){
     #headerDateTime,.topbar-right .status-pill,.topbar-right .logout-btn{font-size:15px;}
   }
+
+  .family-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:18px;}
+  .family-stat{background:#eef4fa;border:1px solid var(--line);border-radius:8px;padding:16px;}
+  .family-stat strong{display:block;font-size:28px;color:var(--navy-2);}
+  .family-stat span{font-size:13px;line-height:1.5;}
+  .family-card{border:1px solid var(--line);border-radius:8px;margin-top:14px;padding:16px;overflow-wrap:anywhere;}
+  .family-card h3{margin:0 0 8px;color:var(--navy-2);font-size:16px;}
+  .family-card p{font-size:13px;line-height:1.6;margin:6px 0;}
+  .family-card .table-scroll{max-height:none;margin-top:10px;}
+  .family-card table{min-width:480px;}
+  .family-analysis{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .family-analysis h3{font-size:14px;color:var(--navy-2);}
+  .app-tabs{flex-wrap:wrap;}
+  @media(max-width:640px){.family-analysis{grid-template-columns:1fr;}.family-stat{padding:12px;}.family-card{padding:12px;}.app-tabs .btn{flex:1 1 130px;}}
 </style>
 </head>
 <body>
@@ -446,8 +460,30 @@
 
   <div class="app-tabs" role="tablist" aria-label="Bahagian sistem">
     <button class="btn btn-primary" id="teacherTab" role="tab" aria-selected="true" aria-controls="teacherPanel">Jana Dokumen</button>
+    <button class="btn btn-ghost" id="siblingsTab" role="tab" aria-selected="false" aria-controls="siblingsPanel">Data Adik Beradik</button>
     <button class="btn btn-ghost" id="adminTab" role="tab" aria-selected="false" aria-controls="adminPanel">🔒 Admin</button>
   </div>
+  <section id="siblingsPanel" role="tabpanel" aria-labelledby="siblingsTab" hidden>
+    <div class="panel">
+      <h2>Data Adik Beradik</h2>
+      <p class="sub">Analisis automatik berdasarkan maklumat ibu bapa dalam data murid semasa. Satu kumpulan keluarga menghubungkan murid yang berkongsi ibu atau bapa, termasuk hubungan melalui adik-beradik seibu atau sebapa.</p>
+      <div id="familyStats" class="family-stats" aria-live="polite"></div>
+      <p class="sub">Padanan mengutamakan nombor pengenalan ibu/bapa. Nama penuh digunakan jika nombor pengenalan tiada dan tidak bercanggah dengan nombor pengenalan lain. Alamat atau telefon sahaja tidak digunakan untuk membentuk keluarga. Bilangan anak merujuk kepada murid dalam pangkalan data ini sahaja.</p>
+      <div id="familyAnalysis" class="family-analysis"></div>
+    </div>
+    <div class="panel">
+      <h2>Senarai Keluarga dan Murid</h2>
+      <p class="sub">Carian dan tapisan mengubah senarai keluarga sahaja. Ringkasan di atas sentiasa merangkumi seluruh sekolah. Semua anak dalam keluarga yang sepadan dipaparkan.</p>
+      <div class="toolbar">
+        <div class="search"><input id="familySearch" type="search" placeholder="Cari nama murid atau ibu bapa..." aria-label="Cari keluarga"></div>
+        <select id="familyClassFilter" aria-label="Tapis keluarga mengikut kelas"><option value="">Semua Kelas</option></select>
+        <select id="familySizeFilter" aria-label="Tapis bilangan anak"><option value="">Semua keluarga adik-beradik</option></select>
+        <button class="btn btn-primary" id="exportFamiliesBtn">Muat Turun Excel</button>
+      </div>
+      <p id="familyResultCount" class="sub" aria-live="polite"></p>
+      <div id="familyList"></div>
+    </div>
+  </section>
   <section id="adminPanel" role="tabpanel" aria-labelledby="adminTab" hidden>
     <form class="panel" id="adminLoginForm">
       <h2>Akses Admin</h2>
@@ -639,14 +675,17 @@ function lockAdmin(){
 function showTab(tab){
   lockAdmin();
   const isAdmin = tab === 'admin';
-  teacherPanel.hidden = isAdmin;
+  teacherPanel.hidden = tab !== 'teacher';
+  document.getElementById('siblingsPanel').hidden = tab !== 'siblings';
   adminPanel.hidden = !isAdmin;
-  teacherTab.setAttribute('aria-selected', String(!isAdmin));
+  teacherTab.setAttribute('aria-selected', String(tab === 'teacher'));
+  document.getElementById('siblingsTab').setAttribute('aria-selected', String(tab === 'siblings'));
   adminTab.setAttribute('aria-selected', String(isAdmin));
   if(isAdmin) adminPassword.focus();
 }
 teacherTab.addEventListener('click', ()=> showTab('teacher'));
 adminTab.addEventListener('click', ()=> showTab('admin'));
+document.getElementById('siblingsTab').addEventListener('click', ()=> showTab('siblings'));
 document.getElementById('lockAdminBtn').addEventListener('click', ()=>{
   lockAdmin();
   adminPassword.focus();
@@ -972,6 +1011,7 @@ onValue(ref(db, 'students'), (snap)=>{
   allStudents = snap.val() || {};
   populateClassFilter();
   renderTable();
+  refreshFamilies();
 });
 
 /* ---------- live listen to last upload info ---------- */
@@ -1148,6 +1188,98 @@ document.getElementById('selectAllBtn').addEventListener('click', ()=>{
 document.getElementById('clearSelBtn').addEventListener('click', ()=>{
   selectedIds.clear();
   renderTable();
+});
+
+
+/* ---------- automatic family analysis ---------- */
+let familyData = [];
+function normalizeParent(value){
+  const text = String(value || '').normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu, '');
+  return /^(|0+|NA|NIL|TIADA|TIDAKDIKETAHUI|TIDAKBERKENAAN|UNKNOWN|NULL|UNDEFINED)$/.test(text) ? '' : text;
+}
+function getParents(student){
+  return [1,2].flatMap(slot=>{
+    const relation = normalizeParent(student['HUBUNGAN PENJAGA ' + slot]);
+    if(relation && !['IBU','BAPA','AYAH','IBUKANDUNG','BAPAKANDUNG','AYAHKANDUNG','IBUANGKAT','BAPAANGKAT','IBUTIRI','BAPATIRI','MOTHER','FATHER'].includes(relation)) return [];
+    const name = String(student['PENJAGA ' + slot] || '').trim();
+    const id = normalizeParent(student['NO PENGENALAN PENJAGA ' + slot]);
+    const normalizedName = normalizeParent(name);
+    if(!id && !normalizedName) return [];
+    return [{id,name,normalizedName,relation:relation || 'HUBUNGAN TIDAK DIISI',phone:student['NO TEL BIMBIT PENJAGA ' + slot] || ''}];
+  });
+}
+function buildFamilies(students){
+  const entries = Object.entries(students).map(([id,student])=>({id,student,parents:getParents(student)}));
+  const roots = entries.map((_,i)=>i);
+  function root(i){while(roots[i] !== i){roots[i] = roots[roots[i]];i=roots[i];}return i;}
+  const nameIds = new Map();
+  entries.forEach(e=>e.parents.forEach(p=>{if(p.normalizedName && p.id){if(!nameIds.has(p.normalizedName)) nameIds.set(p.normalizedName,new Set());nameIds.get(p.normalizedName).add(p.id);}}));
+  const keys = new Map();
+  entries.forEach((e,i)=>e.parents.forEach(p=>{
+    const ids = nameIds.get(p.normalizedName);
+    const inferredId = !p.id && ids && ids.size === 1 ? [...ids][0] : '';
+    p.matchKey = p.id || inferredId ? 'id:' + (p.id || inferredId) : p.normalizedName && !ids ? 'name:' + p.normalizedName : '';
+    if(!p.matchKey) return;
+    if(keys.has(p.matchKey)) roots[root(i)] = root(keys.get(p.matchKey));
+    else keys.set(p.matchKey,i);
+  }));
+  const groups = new Map();
+  entries.forEach((e,i)=>{const r=root(i);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(e);});
+  return [...groups.values()].map(members=>({members:members.sort((a,b)=>(a.student.NAMA||'').localeCompare(b.student.NAMA||'')),linked:members.some(m=>m.parents.some(p=>p.matchKey))})).sort((a,b)=>b.members.length-a.members.length || (a.members[0].student.NAMA||'').localeCompare(b.members[0].student.NAMA||''));
+}
+function familyTable(headers, rows){
+  return '<div class="table-scroll"><table><thead><tr>'+headers.map(h=>'<th>'+escHtml(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(cell=>'<td>'+escHtml(cell)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+}
+function refreshFamilies(){
+  familyData = buildFamilies(allStudents);
+  const multiple = familyData.filter(f=>f.members.length>1);
+  const total = Object.keys(allStudents).length;
+  const siblingCount = multiple.reduce((sum,f)=>sum+f.members.length,0);
+  const singles = familyData.filter(f=>f.members.length===1 && f.linked).length;
+  const unlinked = familyData.filter(f=>!f.linked).length;
+  const stats = [['Jumlah murid',total],['Kumpulan keluarga dikenal pasti',multiple.length+singles],['Keluarga dengan adik-beradik',multiple.length],['Murid mempunyai adik-beradik',siblingCount],['Keluarga dengan 1 murid dipautkan',singles],['Murid tanpa pautan ibu bapa',unlinked],['Peratus murid beradik',total ? (siblingCount/total*100).toFixed(1)+'%' : '0%'],['Anak terbanyak dalam keluarga',multiple.length ? multiple[0].members.length : (singles ? 1 : 0)]];
+  document.getElementById('familyStats').innerHTML=stats.map(([label,value])=>'<div class="family-stat"><strong>'+value+'</strong><span>'+label+'</span></div>').join('');
+  const distribution = new Map();
+  familyData.filter(f=>f.linked).forEach(f=>distribution.set(f.members.length,(distribution.get(f.members.length)||0)+1));
+  const classes = new Map();
+  Object.values(allStudents).forEach(s=>{const cls=s['NAMA KELAS']||'Tidak dinyatakan';if(!classes.has(cls))classes.set(cls,{total:0,siblings:0,families:new Set()});classes.get(cls).total++;});
+  multiple.forEach((f,i)=>f.members.forEach(m=>{const c=classes.get(m.student['NAMA KELAS']||'Tidak dinyatakan');c.siblings++;c.families.add(i);}));
+  document.getElementById('familyAnalysis').innerHTML='<div><h3>Taburan bilangan anak di sekolah</h3>'+familyTable(['Anak / keluarga','Keluarga','Murid'],[...distribution].sort((a,b)=>a[0]-b[0]).map(([size,count])=>[size,count,size*count]))+'</div><div><h3>Analisis mengikut kelas</h3>'+familyTable(['Kelas','Jumlah murid','Murid beradik','Keluarga beradik'],[...classes].sort((a,b)=>a[0].localeCompare(b[0])).map(([cls,c])=>[cls,c.total,c.siblings,c.families.size]))+'<p class="sub">Keluarga yang sama boleh terlibat dalam beberapa kelas; bilangan keluarga mengikut kelas tidak boleh dijumlahkan sebagai jumlah keluarga sekolah.</p></div>';
+  const select=document.getElementById('familyClassFilter'),previous=select.value;
+  select.replaceChildren(new Option('Semua Kelas',''),...[...classes.keys()].sort().map(c=>new Option(c,c)));
+  if(classes.has(previous))select.value=previous;
+  const sizes=document.getElementById('familySizeFilter'),previousSize=sizes.value;
+  sizes.replaceChildren(new Option('Semua keluarga adik-beradik',''),...[...distribution.keys()].filter(n=>n>1).sort((a,b)=>a-b).map(n=>new Option(n+' anak',String(n))),new Option('1 anak (tiada adik-beradik dipautkan)','1'),new Option('Tiada pautan ibu bapa','unlinked'));
+  if([...sizes.options].some(o=>o.value===previousSize))sizes.value=previousSize;
+  renderFamilies();
+}
+function filteredFamilies(){
+  const query=document.getElementById('familySearch').value.trim().toLocaleLowerCase();
+  const cls=document.getElementById('familyClassFilter').value;
+  const size=document.getElementById('familySizeFilter').value;
+  return familyData.map((f,index)=>({...f,index})).filter(f=>{
+    const sizeMatch=size==='unlinked' ? !f.linked : size ? f.linked && f.members.length===Number(size) : f.members.length>1;
+    return sizeMatch && (!cls || f.members.some(m=>(m.student['NAMA KELAS']||'Tidak dinyatakan')===cls)) && (!query || f.members.some(m=>[m.student.NAMA,...m.parents.map(p=>p.name)].some(v=>String(v||'').toLocaleLowerCase().includes(query))));
+  });
+}
+function renderFamilies(){
+  const list=filteredFamilies();
+  document.getElementById('familyResultCount').textContent=list.length+' kumpulan / rekod dipaparkan ? '+list.reduce((sum,f)=>sum+f.members.length,0)+' murid termasuk semua kelas dalam kumpulan.';
+  document.getElementById('exportFamiliesBtn').disabled=!list.length;
+  document.getElementById('familyList').innerHTML=list.length ? list.map(f=>{
+    const parents=new Map();
+    f.members.forEach(m=>m.parents.forEach(p=>{const key=p.matchKey||p.normalizedName||p.id;if(!parents.has(key))parents.set(key,p);}));
+    const details=[...parents.values()].map(p=>escHtml(p.name||'Nama tidak diisi')+' ('+escHtml(p.relation)+')'+(p.phone ? ' ? Tel: '+escHtml(p.phone) : '')).join('<br>');
+    const shared=new Map();f.members.forEach(m=>new Set(m.parents.map(p=>p.matchKey).filter(Boolean)).forEach(key=>shared.set(key,(shared.get(key)||0)+1)));
+    const basis=[...shared].filter(([,count])=>count>1).map(([key])=>key.startsWith('id:')?'No. pengenalan ibu/bapa sama':'Nama penuh ibu/bapa sama');
+    return '<article class="family-card"><h3>Kumpulan '+(f.index+1)+' ? '+f.members.length+' murid</h3><p>'+details+'</p><p>Asas pautan: '+escHtml([...new Set(basis)].join('; ') || (f.linked?'Satu murid dengan maklumat ibu/bapa':'Tiada maklumat ibu/bapa yang boleh dipadankan'))+'</p>'+familyTable(['Nama murid','Kelas','Tahun / Tingkatan','Tarikh lahir'],f.members.map(m=>[m.student.NAMA||'-',m.student['NAMA KELAS']||'-',m.student['TAHUN - TINGKATAN']||'-',m.student['TARIKH LAHIR']||'-']))+'</article>';
+  }).join('') : '<div class="empty-state">Tiada rekod sepadan dengan carian atau tapisan. Jika data belum dimuatkan, sila tunggu sambungan Firebase.</div>';
+}
+['familySearch','familyClassFilter','familySizeFilter'].forEach(id=>document.getElementById(id).addEventListener(id==='familySearch'?'input':'change',renderFamilies));
+document.getElementById('exportFamiliesBtn').addEventListener('click',()=>{
+  if(typeof XLSX==='undefined'){toast('Pustaka Excel gagal dimuatkan. Sila muat semula halaman.','err');return;}
+  const rows=filteredFamilies().flatMap(f=>f.members.map(m=>({'Kumpulan':f.index+1,'Bilangan murid keluarga':f.members.length,'Nama murid':m.student.NAMA||'','Kelas':m.student['NAMA KELAS']||'','Tahun / Tingkatan':m.student['TAHUN - TINGKATAN']||'','Penjaga 1':m.student['PENJAGA 1']||'','Hubungan penjaga 1':m.student['HUBUNGAN PENJAGA 1']||'','Penjaga 2':m.student['PENJAGA 2']||'','Hubungan penjaga 2':m.student['HUBUNGAN PENJAGA 2']||''})));
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rows),'Data Adik Beradik');XLSX.writeFile(book,'Data_Adik_Beradik.xlsx');
 });
 
 /* ---------- document generation (native .pdf via jsPDF + autoTable) ---------- */
