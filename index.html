@@ -500,23 +500,23 @@
   </div>
   <section id="siblingsPanel" role="tabpanel" aria-labelledby="siblingsTab" hidden>
     <div class="panel">
-      <h2>Cari Murid dan Adik-Beradiknya</h2>
-      <p class="sub">Taip nama seorang murid untuk melihat semua adik-beradiknya di sekolah bersama kelas masing-masing. Semua keluarga dengan 2, 3 atau lebih anak disertakan secara automatik. Tapisan kelas turut memaparkan adik-beradik di kelas lain.</p>
-      <div class="toolbar">
-        <div class="search"><input id="familySearch" type="search" placeholder="Taip nama murid atau ibu bapa..." aria-label="Cari murid dan adik-beradiknya"></div>
-        <select id="familyClassFilter" aria-label="Tapis keluarga mengikut kelas"><option value="">Semua Kelas</option></select>
-        <select id="familySizeFilter" aria-label="Tapis bilangan anak"><option value="">Semua bilangan (2 beradik dan ke atas)</option></select>
-        <button class="btn btn-primary" id="exportFamiliesBtn">Muat Turun Excel</button>
-      </div>
-      <p id="familyResultCount" class="sub" aria-live="polite"></p>
-      <div id="familyList"></div>
-    </div>
-    <div class="panel">
       <h2>Data Adik Beradik</h2>
       <p class="sub">Analisis automatik berdasarkan maklumat ibu bapa dalam data murid semasa. Satu kumpulan keluarga menghubungkan murid yang berkongsi ibu atau bapa, termasuk hubungan melalui adik-beradik seibu atau sebapa.</p>
       <div id="familyStats" class="family-tree" aria-live="polite"></div>
       <p class="sub">Padanan mengutamakan nombor pengenalan ibu/bapa. Nama penuh digunakan jika nombor pengenalan tiada dan tidak bercanggah dengan nombor pengenalan lain. Alamat atau telefon sahaja tidak digunakan untuk membentuk keluarga. Bilangan anak merujuk kepada murid dalam pangkalan data ini sahaja.</p>
       <div id="familyAnalysis" class="family-analysis"></div>
+    </div>
+    <div class="panel">
+      <h2>Senarai Keluarga dan Murid</h2>
+      <p class="sub">Carian dan tapisan mengubah senarai keluarga sahaja. Ringkasan di atas sentiasa merangkumi seluruh sekolah. Semua anak dalam keluarga yang sepadan dipaparkan.</p>
+      <div class="toolbar">
+        <div class="search"><input id="familySearch" type="search" placeholder="Cari nama murid atau ibu bapa..." aria-label="Cari keluarga"></div>
+        <select id="familyClassFilter" aria-label="Tapis keluarga mengikut kelas"><option value="">Semua Kelas</option></select>
+        <select id="familySizeFilter" aria-label="Tapis bilangan anak"><option value="">Semua keluarga adik-beradik</option></select>
+        <button class="btn btn-primary" id="exportFamiliesBtn">Muat Turun Excel</button>
+      </div>
+      <p id="familyResultCount" class="sub" aria-live="polite"></p>
+      <div id="familyList"></div>
     </div>
   </section>
   <section id="adminPanel" role="tabpanel" aria-labelledby="adminTab" hidden>
@@ -1304,7 +1304,7 @@ function refreshFamilies(){
   select.replaceChildren(new Option('Semua Kelas',''),...[...classes.keys()].sort().map(c=>new Option(c,c)));
   if(classes.has(previous))select.value=previous;
   const sizes=document.getElementById('familySizeFilter'),previousSize=sizes.value;
-  sizes.replaceChildren(new Option('Semua bilangan (2 beradik dan ke atas)',''),new Option('Semua murid (semua pecahan)','all'),new Option('Semua keluarga dikenal pasti','linked'),...[...distribution.keys()].filter(n=>n>1).sort((a,b)=>a-b).map(n=>new Option(n+' anak',String(n))),new Option('1 anak (tiada adik-beradik dipautkan)','1'),new Option('Tiada pautan ibu bapa','unlinked'));
+  sizes.replaceChildren(new Option('Semua keluarga adik-beradik',''),new Option('Semua murid (semua pecahan)','all'),new Option('Semua keluarga dikenal pasti','linked'),...[...distribution.keys()].filter(n=>n>1).sort((a,b)=>a-b).map(n=>new Option(n+' anak',String(n))),new Option('1 anak (tiada adik-beradik dipautkan)','1'),new Option('Tiada pautan ibu bapa','unlinked'));
   if([...sizes.options].some(o=>o.value===previousSize))sizes.value=previousSize;
   renderFamilies();
 }
@@ -1319,8 +1319,7 @@ function filteredFamilies(){
 }
 function renderFamilies(){
   const list=filteredFamilies();
-  const studentsShown=list.reduce((sum,f)=>sum+f.members.length,0);
-  document.getElementById('familyResultCount').textContent=list.length+' keluarga ditemui, melibatkan '+studentsShown+' murid. Semua anak dalam keluarga dipaparkan walaupun berlainan kelas.';
+  document.getElementById('familyResultCount').textContent=list.length+' kumpulan / rekod dipaparkan | '+list.reduce((sum,f)=>sum+f.members.length,0)+' murid termasuk semua kelas dalam kumpulan.';
   document.getElementById('exportFamiliesBtn').disabled=!list.length;
   document.getElementById('familyList').innerHTML=list.length ? list.map(f=>{
     const parents=new Map();
@@ -1329,7 +1328,7 @@ function renderFamilies(){
     const shared=new Map();f.members.forEach(m=>new Set(m.parents.map(p=>p.matchKey).filter(Boolean)).forEach(key=>shared.set(key,(shared.get(key)||0)+1)));
     const basis=[...shared].filter(([,count])=>count>1).map(([key])=>key.startsWith('id:')?'No. pengenalan ibu/bapa sama':'Nama penuh ibu/bapa sama');
     return '<article class="family-card"><h3>Keluarga '+(f.index+1)+' &mdash; '+f.members.length+' orang anak di sekolah ini</h3><p>'+details+'</p><p>Asas pautan: '+escHtml([...new Set(basis)].join('; ') || (f.linked?'Satu murid dengan maklumat ibu/bapa':'Tiada maklumat ibu/bapa yang boleh dipadankan'))+'</p>'+familyTable(['Nama murid','Kelas','Tahun / Tingkatan','Tarikh lahir'],f.members.map(m=>[m.student.NAMA||'-',m.student['NAMA KELAS']||'-',m.student['TAHUN - TINGKATAN']||'-',m.student['TARIKH LAHIR']||'-']))+'</article>';
-  }).join('') : '<div class="empty-state">Tiada padanan mengikut carian atau tapisan ini. Cuba nama lain atau pilih Semua Kelas. Murid tanpa padanan ibu/bapa yang sama tidak tersenarai sebagai adik-beradik.</div>';
+  }).join('') : '<div class="empty-state">Tiada rekod sepadan dengan carian atau tapisan. Jika data belum dimuatkan, sila tunggu sambungan Firebase.</div>';
 }
 document.getElementById('familyStats').addEventListener('click',event=>{
   const button=event.target.closest('button[data-family-scope]');
@@ -1340,11 +1339,7 @@ document.getElementById('familyStats').addEventListener('click',event=>{
   renderFamilies();
   document.getElementById('familyResultCount').scrollIntoView({behavior:'smooth',block:'start'});
 });
-document.getElementById('familySearch').addEventListener('input',()=>{
-  document.getElementById('familySizeFilter').value='';
-  renderFamilies();
-});
-['familyClassFilter','familySizeFilter'].forEach(id=>document.getElementById(id).addEventListener('change',renderFamilies));
+['familySearch','familyClassFilter','familySizeFilter'].forEach(id=>document.getElementById(id).addEventListener(id==='familySearch'?'input':'change',renderFamilies));
 document.getElementById('exportFamiliesBtn').addEventListener('click',()=>{
   if(typeof XLSX==='undefined'){toast('Pustaka Excel gagal dimuatkan. Sila muat semula halaman.','err');return;}
   const rows=filteredFamilies().flatMap(f=>f.members.map(m=>({'Kumpulan':f.index+1,'Bilangan murid keluarga':f.members.length,'Nama murid':m.student.NAMA||'','Kelas':m.student['NAMA KELAS']||'','Tahun / Tingkatan':m.student['TAHUN - TINGKATAN']||'','Penjaga 1':m.student['PENJAGA 1']||'','Hubungan penjaga 1':m.student['HUBUNGAN PENJAGA 1']||'','Penjaga 2':m.student['PENJAGA 2']||'','Hubungan penjaga 2':m.student['HUBUNGAN PENJAGA 2']||''})));
