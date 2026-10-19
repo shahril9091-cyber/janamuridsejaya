@@ -1237,7 +1237,7 @@ function refreshFamilies(){
   const siblingCount = multiple.reduce((sum,f)=>sum+f.members.length,0);
   const singles = familyData.filter(f=>f.members.length===1 && f.linked).length;
   const unlinked = familyData.filter(f=>!f.linked).length;
-  const stats = [['Jumlah murid',total],['Kumpulan keluarga dikenal pasti',multiple.length+singles],['Keluarga dengan adik-beradik',multiple.length],['Murid mempunyai adik-beradik',siblingCount],['Keluarga dengan 1 murid dipautkan',singles],['Murid tanpa pautan ibu bapa',unlinked],['Peratus murid beradik',total ? (siblingCount/total*100).toFixed(1)+'%' : '0%'],['Anak terbanyak dalam keluarga',multiple.length ? multiple[0].members.length : (singles ? 1 : 0)]];
+  const stats = [['Jumlah murid',total],['Kumpulan keluarga dikenal pasti',multiple.length+singles],['Keluarga dengan adik-beradik',multiple.length],['Murid mempunyai adik-beradik',siblingCount],['Murid tanpa padanan adik-beradik di sekolah',singles],['Murid tanpa pautan ibu bapa',unlinked],['Peratus murid beradik',total ? (siblingCount/total*100).toFixed(1)+'%' : '0%'],['Anak terbanyak dalam keluarga',multiple.length ? multiple[0].members.length : (singles ? 1 : 0)]];
   document.getElementById('familyStats').innerHTML=stats.map(([label,value])=>'<div class="family-stat"><strong>'+value+'</strong><span>'+label+'</span></div>').join('');
   const distribution = new Map();
   familyData.filter(f=>f.linked).forEach(f=>distribution.set(f.members.length,(distribution.get(f.members.length)||0)+1));
