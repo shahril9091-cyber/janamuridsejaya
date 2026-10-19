@@ -1256,19 +1256,19 @@ function refreshFamilies(){
   familyData.filter(f=>f.linked).forEach(f=>distribution.set(f.members.length,(distribution.get(f.members.length)||0)+1));
   const siblingDistribution=[...distribution].filter(([size])=>size>1).sort((a,b)=>a[0]-b[0]);
   const familyCount=multiple.length+singles;
-  const breakdown=siblingDistribution.map(([size,count])=>'<p><b>'+count+' keluarga ? '+size+' murid = '+(size*count)+' murid</b><br><button class="btn btn-ghost" data-family-scope="'+size+'">Lihat '+count+' keluarga dengan '+size+' anak</button></p>').join('');
+  const breakdown=siblingDistribution.map(([size,count])=>'<p><b>'+count+' keluarga &times; '+size+' murid = '+(size*count)+' murid</b><br><button class="btn btn-ghost" data-family-scope="'+size+'">Lihat '+count+' keluarga dengan '+size+' anak</button></p>').join('');
   const view=(scope,label)=>'<button class="btn btn-ghost" data-family-scope="'+scope+'">'+label+'</button>';
   document.getElementById('familyStats').innerHTML=
     '<div class="family-root"><h3>Asal data: '+total+' murid dalam pangkalan data sekolah</h3><p>Setiap murid dikira sekali dalam salah satu daripada tiga pecahan di bawah.</p><p class="family-equation">'+total+' murid = '+siblingCount+' murid beradik + '+singles+' murid tanpa padanan adik-beradik + '+unlinked+' murid tanpa pautan ibu bapa</p>'+view('all','Lihat semua '+total+' murid')+'</div>'+
     '<div class="family-children">'+
       '<div class="family-branch"><h3>1. Mempunyai padanan adik-beradik: '+siblingCount+' murid</h3><p>Murid ini berada dalam <b>'+multiple.length+' keluarga</b> yang mempunyai sekurang-kurangnya dua murid di sekolah.</p><p class="family-equation">'+siblingCount+' murid = '+(siblingDistribution.map(([size,count])=>size*count).join(' + ')||'0')+' murid</p>'+view('','Lihat semua keluarga adik-beradik')+'<div class="family-breakdown">'+(breakdown||'<p>Belum ada keluarga adik-beradik dikenal pasti.</p>')+'</div></div>'+
-      '<div class="family-branch"><h3>2. Tanpa padanan adik-beradik: '+singles+' murid</h3><p>Maklumat ibu/bapa boleh digunakan, tetapi tiada murid lain dipadankan dengan keluarga ini.</p><p class="family-equation">'+singles+' murid = '+singles+' keluarga ? 1 murid</p>'+view('1','Lihat '+singles+' murid ini')+'</div>'+
+      '<div class="family-branch"><h3>2. Tanpa padanan adik-beradik: '+singles+' murid</h3><p>Maklumat ibu/bapa boleh digunakan, tetapi tiada murid lain dipadankan dengan keluarga ini.</p><p class="family-equation">'+singles+' murid = '+singles+' keluarga &times; 1 murid</p>'+view('1','Lihat '+singles+' murid ini')+'</div>'+
       '<div class="family-branch"><h3>3. Tiada pautan ibu bapa yang boleh digunakan: '+unlinked+' murid</h3><p>Data ibu/bapa tiada, tidak sesuai untuk padanan atau nama mempunyai nombor pengenalan yang bercanggah. Murid ini belum boleh dikira sebagai keluarga yang dikenal pasti.</p>'+view('unlinked','Lihat '+unlinked+' murid ini')+'</div></div>'+
     '<div class="family-root"><h3>Daripada pecahan di atas: '+familyCount+' keluarga dikenal pasti</h3><p class="family-equation">'+familyCount+' keluarga = '+multiple.length+' keluarga beradik (pecahan 1) + '+singles+' keluarga seorang murid (pecahan 2)</p><p>Pecahan 3 ('+unlinked+' murid) tidak termasuk dalam jumlah keluarga ini. Keluarga bermaksud kumpulan yang dipautkan melalui ibu atau bapa dalam data sekolah.</p>'+view('linked','Lihat semua '+familyCount+' keluarga')+'</div>';
   const classes = new Map();
   Object.values(allStudents).forEach(s=>{const cls=s['NAMA KELAS']||'Tidak dinyatakan';if(!classes.has(cls))classes.set(cls,{total:0,siblings:0,families:new Set()});classes.get(cls).total++;});
   multiple.forEach((f,i)=>f.members.forEach(m=>{const c=classes.get(m.student['NAMA KELAS']||'Tidak dinyatakan');c.siblings++;c.families.add(i);}));
-  document.getElementById('familyAnalysis').innerHTML='<div><h3>Taburan bilangan anak di sekolah</h3>'+familyTable(['Murid sekeluarga','Bilangan keluarga','Pengiraan murid'],[...distribution].sort((a,b)=>a[0]-b[0]).map(([size,count])=>[size,count,count+' ? '+size+' = '+(size*count)+' murid']))+'</div><div><h3>Analisis mengikut kelas</h3>'+familyTable(['Kelas','Jumlah murid','Murid beradik','Keluarga beradik'],[...classes].sort((a,b)=>a[0].localeCompare(b[0])).map(([cls,c])=>[cls,c.total,c.siblings,c.families.size]))+'<p class="sub">Keluarga yang sama boleh terlibat dalam beberapa kelas; bilangan keluarga mengikut kelas tidak boleh dijumlahkan sebagai jumlah keluarga sekolah.</p></div>';
+  document.getElementById('familyAnalysis').innerHTML='<div><h3>Taburan bilangan anak di sekolah</h3>'+familyTable(['Murid sekeluarga','Bilangan keluarga','Pengiraan murid'],[...distribution].sort((a,b)=>a[0]-b[0]).map(([size,count])=>[size,count,count+' \u00d7 '+size+' = '+(size*count)+' murid']))+'</div><div><h3>Analisis mengikut kelas</h3>'+familyTable(['Kelas','Jumlah murid','Murid beradik','Keluarga beradik'],[...classes].sort((a,b)=>a[0].localeCompare(b[0])).map(([cls,c])=>[cls,c.total,c.siblings,c.families.size]))+'<p class="sub">Keluarga yang sama boleh terlibat dalam beberapa kelas; bilangan keluarga mengikut kelas tidak boleh dijumlahkan sebagai jumlah keluarga sekolah.</p></div>';
   const select=document.getElementById('familyClassFilter'),previous=select.value;
   select.replaceChildren(new Option('Semua Kelas',''),...[...classes.keys()].sort().map(c=>new Option(c,c)));
   if(classes.has(previous))select.value=previous;
@@ -1288,12 +1288,12 @@ function filteredFamilies(){
 }
 function renderFamilies(){
   const list=filteredFamilies();
-  document.getElementById('familyResultCount').textContent=list.length+' kumpulan / rekod dipaparkan ? '+list.reduce((sum,f)=>sum+f.members.length,0)+' murid termasuk semua kelas dalam kumpulan.';
+  document.getElementById('familyResultCount').textContent=list.length+' kumpulan / rekod dipaparkan | '+list.reduce((sum,f)=>sum+f.members.length,0)+' murid termasuk semua kelas dalam kumpulan.';
   document.getElementById('exportFamiliesBtn').disabled=!list.length;
   document.getElementById('familyList').innerHTML=list.length ? list.map(f=>{
     const parents=new Map();
     f.members.forEach(m=>m.parents.forEach(p=>{const key=p.matchKey||p.normalizedName||p.id;if(!parents.has(key))parents.set(key,p);}));
-    const details=[...parents.values()].map(p=>escHtml(p.name||'Nama tidak diisi')+' ('+escHtml(p.relation)+')'+(p.phone ? ' ? Tel: '+escHtml(p.phone) : '')).join('<br>');
+    const details=[...parents.values()].map(p=>escHtml(p.name||'Nama tidak diisi')+' ('+escHtml(p.relation)+')'+(p.phone ? ' | Tel: '+escHtml(p.phone) : '')).join('<br>');
     const shared=new Map();f.members.forEach(m=>new Set(m.parents.map(p=>p.matchKey).filter(Boolean)).forEach(key=>shared.set(key,(shared.get(key)||0)+1)));
     const basis=[...shared].filter(([,count])=>count>1).map(([key])=>key.startsWith('id:')?'No. pengenalan ibu/bapa sama':'Nama penuh ibu/bapa sama');
     return '<article class="family-card"><h3>Keluarga '+(f.index+1)+' &mdash; '+f.members.length+' orang anak di sekolah ini</h3><p>'+details+'</p><p>Asas pautan: '+escHtml([...new Set(basis)].join('; ') || (f.linked?'Satu murid dengan maklumat ibu/bapa':'Tiada maklumat ibu/bapa yang boleh dipadankan'))+'</p>'+familyTable(['Nama murid','Kelas','Tahun / Tingkatan','Tarikh lahir'],f.members.map(m=>[m.student.NAMA||'-',m.student['NAMA KELAS']||'-',m.student['TAHUN - TINGKATAN']||'-',m.student['TARIKH LAHIR']||'-']))+'</article>';
